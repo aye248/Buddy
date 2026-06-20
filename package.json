@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "buddy — Sleek AI Chatbot powered by Gemini",
   "engines": {
-    "node": "18.x"
+    "node": "24.x"
   }
 }
