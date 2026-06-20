@@ -1,0 +1,826 @@
+﻿<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>buddy — Sleek AI Chatbot</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="buddy is a sleek, modern, multilingual AI chatbot with real-time web search capabilities powered by Gemini.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            darkBg: '#080c14',
+            darkPanel: '#0f1422',
+            darkCard: '#181f30',
+            darkBorder: '#222d44',
+            emeraldGlow: '#10b981',
+            mintGlow: '#34d399',
+            brandSlate: '#94a3b8'
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            cairo: ['Cairo', 'sans-serif']
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 3s ease-in-out infinite',
+            'fade-in': 'fadeIn 0.3s ease-out forwards',
+            'slide-up': 'slideUp 0.4s ease-out forwards'
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-5px)' }
+            },
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'scale(0.95)' },
+              '100%': { opacity: '1', transform: 'scale(1)' }
+            },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(15px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style type="text/css">
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080c14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #222d44;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #10b981;
+    }
+    
+    /* Custom CSS Overrides */
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #080c14;
+      color: #e2e8f0;
+      overflow: hidden;
+    }
+    
+    .arabic-font {
+      font-family: 'Cairo', sans-serif !important;
+    }
+
+    /* Glassmorphism Classes */
+    .glass-panel {
+      background: rgba(15, 20, 34, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(34, 45, 68, 0.5);
+    }
+    
+    .glass-card {
+      background: rgba(24, 31, 48, 0.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(34, 45, 68, 0.4);
+    }
+
+    /* Typing Dots Animation */
+    .typing-dot {
+      animation: typing-bounce 1.4s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    
+    @keyframes typing-bounce {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+
+  <!-- React & Babel Standalone CDNs (using cdnjs for reliability and removing crossorigin to prevent file:// protocol CORS blocks) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.20/babel.min.js"></script>
+</head>
+<body class="h-full flex flex-col antialiased">
+
+  <div id="root" class="h-full flex flex-col w-full overflow-hidden"></div>
+
+  <!-- React Code in Babel Script -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // API is handled server-side — no key needed in frontend
+
+    // Translation Data
+    const TRANSLATIONS = {
+      en: {
+        appName: "buddy",
+        tagline: "Your smart, friendly AI sidekick",
+        searchingWeb: "Searching the web with Google...",
+        searchQueryPre: "Searching for: ",
+        sourcesLabel: "Sources",
+        settingsTitle: "Buddy Settings",
+        apiKeyLabel: "Gemini API Key",
+        apiKeyPlaceholder: "Enter your Gemini API key...",
+        modelLabel: "Gemini Model",
+        modeLabel: "Operation Mode",
+        modeLive: "Live Gemini API",
+        saveBtn: "Save Settings",
+        closeBtn: "Cancel",
+        inputPlaceholder: "Ask buddy anything...",
+        sendTooltip: "Send Message",
+        liveModeAlert: "Live Gemini API mode active. Requests are processed directly in your browser using Google Search grounding.",
+        clearChat: "Reset Chat",
+        settingsTooltip: "Settings",
+        retryBtn: "Try Again",
+        suggestedTitle: "How can I help you today?",
+        suggestions: [
+          { label: "Summarize a topic", text: "Give me a quick summary of how neural networks work." },
+          { label: "Write for me", text: "Write a short professional bio for a freelance web developer." },
+          { label: "Brainstorm ideas", text: "Give me 5 unique project ideas for a beginner web developer portfolio." },
+          { label: "Explain simply", text: "Explain APIs to me like I'm 10 years old." }
+        ]
+      },
+      ar: {
+        appName: "بَدِي",
+        tagline: "مساعدك الذكي والودود بالذكاء الاصطناعي",
+        searchingWeb: "جاري البحث في الويب باستخدام Google...",
+        searchQueryPre: "البحث عن: ",
+        sourcesLabel: "المصادر",
+        settingsTitle: "إعدادات بَدِي",
+        apiKeyLabel: "مفتاح Gemini API",
+        apiKeyPlaceholder: "أدخل مفتاح Gemini API الخاص بك...",
+        modelLabel: "نموذج Gemini",
+        modeLabel: "نمط التشغيل",
+        modeLive: "اتصال مباشر بـ Gemini API",
+        saveBtn: "حفظ الإعدادات",
+        closeBtn: "إلغاء",
+        inputPlaceholder: "اسأل بَدِي عن أي شيء...",
+        sendTooltip: "إرسال الرسالة",
+        liveModeAlert: "نمط Gemini API المباشر نشط. يتم معالجة الطلبات مباشرة في متصفحك باستخدام بحث Google.",
+        clearChat: "إعادة تعيين المحادثة",
+        settingsTooltip: "الإعدادات",
+        retryBtn: "إعادة المحاولة",
+        suggestedTitle: "كيف يمكنني مساعدتك اليوم؟",
+        suggestions: [
+          { label: "لخّص لي موضوعاً", text: "لخّص لي كيف تعمل الشبكات العصبية الاصطناعية بشكل مبسّط." },
+          { label: "اكتب لي", text: "اكتب لي نبذة مهنية قصيرة لمطور ويب مستقل." },
+          { label: "أفكار مشاريع", text: "اقترح لي 5 أفكار مشاريع مبتكرة لمبتدئ في تطوير الويب." },
+          { label: "اشرح ببساطة", text: "اشرح لي ما هي الـ API كأنني طفل في العاشرة من عمره." }
+        ]
+      },
+      fr: {
+        appName: "buddy",
+        tagline: "Votre compagnon IA intelligent et sympa",
+        searchingWeb: "Recherche sur le web avec Google...",
+        searchQueryPre: "Recherche de : ",
+        sourcesLabel: "Sources",
+        settingsTitle: "Configuration de Buddy",
+        apiKeyLabel: "Clé API Gemini",
+        apiKeyPlaceholder: "Saisissez votre clé API Gemini...",
+        modelLabel: "Modèle Gemini",
+        modeLabel: "Mode d'Opération",
+        modeLive: "API Live Gemini",
+        saveBtn: "Enregistrer",
+        closeBtn: "Annuler",
+        inputPlaceholder: "Demandez n'importe quoi à buddy...",
+        sendTooltip: "Envoyer le message",
+        liveModeAlert: "Mode API Live Gemini actif. Les requêtes sont envoyées directement depuis votre navigateur avec l'ancrage Google Search.",
+        clearChat: "Réinitialiser",
+        settingsTooltip: "Paramètres",
+        retryBtn: "Réessayer",
+        suggestedTitle: "Comment puis-je vous aider aujourd'hui ?",
+        suggestions: [
+          { label: "Résume un sujet", text: "Explique-moi rapidement comment fonctionnent les réseaux de neurones." },
+          { label: "Écris pour moi", text: "Rédige une courte bio professionnelle pour un développeur web freelance." },
+          { label: "Idées de projets", text: "Donne-moi 5 idées de projets originaux pour un portfolio de développeur débutant." },
+          { label: "Explique simplement", text: "Explique-moi ce qu'est une API comme si j'avais 10 ans." }
+        ]
+      }
+    };
+
+    function App() {
+      // States
+      const [lang, setLang] = useState('en');
+      const [messages, setMessages] = useState([]);
+      const [inputText, setInputText] = useState('');
+      const [isTyping, setIsTyping] = useState(false);
+      const [searchingQuery, setSearchingQuery] = useState('');
+      const [showSettings, setShowSettings] = useState(false);
+      
+      // Configuration States (saved in localStorage)
+      const [model, setModel] = useState(() => {
+        const saved = localStorage.getItem('buddy_gemini_model');
+        // Clear stale 1.5 model names that are no longer supported
+        if (!saved || saved === 'gemini-1.5-flash' || saved === 'gemini-1.5-pro') {
+          localStorage.removeItem('buddy_gemini_model');
+          return 'gemini-2.0-flash';
+        }
+        return saved;
+      });
+      const mode = 'live';
+      
+      const messagesEndRef = useRef(null);
+      const scrollAreaRef = useRef(null);
+      const [showScrollUp, setShowScrollUp] = useState(false);
+      const [showScrollDown, setShowScrollDown] = useState(false);
+
+      const handleScroll = () => {
+        const el = scrollAreaRef.current;
+        if (!el) return;
+        setShowScrollUp(el.scrollTop > 100);
+        setShowScrollDown(el.scrollTop < el.scrollHeight - el.clientHeight - 100);
+      };
+
+      useEffect(() => {
+        const el = scrollAreaRef.current;
+        if (!el) return;
+        el.addEventListener('scroll', handleScroll);
+        handleScroll();
+        return () => el.removeEventListener('scroll', handleScroll);
+      }, [messages]);
+
+      const scrollToTop = () => scrollAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      const scrollToBottom = () => scrollAreaRef.current?.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: 'smooth' });
+
+      // Scroll to bottom when messages list changes or typing state changes
+      useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, [messages, isTyping, searchingQuery]);
+
+      // Save config to localStorage
+      const handleSaveSettings = (newModel) => {
+        localStorage.setItem('buddy_gemini_model', newModel);
+        setModel(newModel);
+        setShowSettings(false);
+      };
+
+      // Clear Chat handler
+      const handleClearChat = () => {
+        setMessages([]);
+        setSearchingQuery('');
+        setIsTyping(false);
+      };
+
+      // Call our backend — key is hidden server-side
+      const callGeminiAPI = async (messagesHistory) => {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: messagesHistory,
+            model: model,
+            lang: lang
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        return data;
+      };
+
+      // Handle Message Send
+      const handleSendMessage = async (textToSend) => {
+        const trimmed = textToSend.trim();
+        if (!trimmed) return;
+
+        // Reset input field
+        setInputText('');
+
+        // Add user message
+        const newMsgUser = { id: Date.now(), sender: 'user', text: trimmed, timestamp: new Date() };
+        const updatedMessages = [...messages, newMsgUser];
+        setMessages(updatedMessages);
+
+        // LIVE GEMINI API MODE
+        setIsTyping(true);
+        
+        // Pre-emptively show search loader if request seems search-related
+        const isSearchImplied = /weather|price|stock|football|latest|current|news|طقس|سعر|أخبار/i.test(trimmed);
+        if (isSearchImplied) {
+          setSearchingQuery(trimmed);
+        }
+
+        try {
+          const data = await callGeminiAPI(updatedMessages);
+          setSearchingQuery('');
+          setIsTyping(false);
+
+          const candidate = data.candidates?.[0];
+          const replyText = candidate?.content?.parts?.[0]?.text || "I was unable to formulate a response.";
+          
+          let parsedSources = [];
+          let didSearch = false;
+
+          // Extract Google Grounding Metadata if available
+          if (candidate?.groundingMetadata) {
+            const meta = candidate.groundingMetadata;
+            // Check if actual search queries were executed
+            if (meta.webSearchQueries && meta.webSearchQueries.length > 0) {
+              didSearch = true;
+            }
+            // Parse grounding chunks to build citations
+            if (meta.groundingChunks && Array.isArray(meta.groundingChunks)) {
+              const uniqueUrls = new Set();
+              meta.groundingChunks.forEach(chunk => {
+                if (chunk.web && chunk.web.uri) {
+                  const url = chunk.web.uri;
+                  if (!uniqueUrls.has(url)) {
+                    uniqueUrls.add(url);
+                    parsedSources.push({
+                      title: chunk.web.title || url,
+                      url: url
+                    });
+                  }
+                }
+              });
+            }
+          }
+
+          setMessages(prev => [...prev, {
+            id: Date.now() + 1,
+            sender: 'assistant',
+            text: replyText,
+            sources: parsedSources,
+            searched: didSearch || parsedSources.length > 0,
+            timestamp: new Date()
+          }]);
+
+        } catch (err) {
+          setSearchingQuery('');
+          setIsTyping(false);
+          console.error("API Error:", err);
+          
+          setMessages(prev => [...prev, {
+            id: Date.now() + 1,
+            sender: 'system-error',
+            text: `API Error: ${err.message}. Please verify your Gemini API key inside Settings.`,
+            timestamp: new Date()
+          }]);
+        }
+      };
+
+      // Helper to parse markdown-like bold text and inline links in UI
+      const renderMessageContent = (text) => {
+        if (!text) return null;
+        
+        // Simple line break splitter
+        const paragraphs = text.split('\n');
+        
+        return paragraphs.map((p, idx) => {
+          // Check for bullet lists
+          if (p.trim().startsWith('- ')) {
+            return (
+              <ul key={idx} className="list-disc list-inside my-1 pl-4 opacity-90 text-sm md:text-[15px] leading-relaxed">
+                <li>{parseInlineElements(p.trim().substring(2))}</li>
+              </ul>
+            );
+          }
+          return (
+            <p key={idx} className="my-2 opacity-95 text-sm md:text-[15px] leading-relaxed">
+              {parseInlineElements(p)}
+            </p>
+          );
+        });
+      };
+
+      // Helper to parse bold (**text**) and markdown links ([text](url)) in UI
+      const parseInlineElements = (text) => {
+        const parts = [];
+        let index = 0;
+        
+        // Regex combining bold markers and markdown links
+        const tokenRegex = /(\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
+        let match;
+        
+        while ((match = tokenRegex.exec(text)) !== null) {
+          // Add plain text before match
+          if (match.index > index) {
+            parts.push(text.substring(index, match.index));
+          }
+          
+          if (match[2]) {
+            // Bold match
+            parts.push(<strong key={match.index} className="font-bold text-white">{match[2]}</strong>);
+          } else if (match[3] && match[4]) {
+            // Link match
+            parts.push(
+              <a 
+                key={match.index} 
+                href={match[4]} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-emerald-400 hover:text-emerald-300 underline font-medium transition-colors duration-150"
+              >
+                {match[3]}
+              </a>
+            );
+          }
+          
+          index = tokenRegex.lastIndex;
+        }
+        
+        if (index < text.length) {
+          parts.push(text.substring(index));
+        }
+        
+        return parts.length > 0 ? parts : text;
+      };
+
+      // Language translatables shorthand
+      const t = TRANSLATIONS[lang];
+      const isRtl = lang === 'ar';
+
+      return (
+        <div className={`h-full flex flex-col w-full text-slate-100 ${isRtl ? 'arabic-font' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
+          
+          {/* Header */}
+          <header className="glass-panel border-b border-darkBorder flex items-center justify-between px-4 py-3 md:px-6 relative z-10">
+            <div className="flex items-center space-x-3 space-x-reverse">
+              {/* Logo icon with animated pulse */}
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950/30">
+                <i className="fa-solid font-bold text-white text-sm fa-robot animate-float"></i>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold tracking-wide bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent flex items-center gap-2">
+                  {t.appName}
+                </h1>
+                <p className="text-[10px] text-slate-400 hidden md:block mt-0.5">{t.tagline}</p>
+              </div>
+            </div>
+
+
+
+            {/* Right Side Header Controls */}
+            <div className="flex items-center gap-3">
+              {/* Language Switcher Button Group */}
+              <div className="flex bg-slate-800/80 p-0.5 rounded-lg border border-slate-700/60 text-xs font-medium">
+                <button 
+                  onClick={() => setLang('en')} 
+                  className={`px-2.5 py-1 rounded-md transition-all ${lang === 'en' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  EN
+                </button>
+                <button 
+                  onClick={() => setLang('ar')} 
+                  className={`px-2.5 py-1 rounded-md transition-all ${lang === 'ar' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  العربية
+                </button>
+                <button 
+                  onClick={() => setLang('fr')} 
+                  className={`px-2.5 py-1 rounded-md transition-all ${lang === 'fr' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  FR
+                </button>
+              </div>
+
+              {/* Reset Chat Icon */}
+              {messages.length > 0 && (
+                <button 
+                  onClick={handleClearChat}
+                  title={t.clearChat}
+                  className="w-9 h-9 rounded-lg bg-slate-800/40 hover:bg-slate-800 hover:text-red-400 border border-slate-700/50 flex items-center justify-center transition-all duration-200"
+                >
+                  <i className="fa-solid fa-trash-can text-sm"></i>
+                </button>
+              )}
+
+              {/* Settings Gear */}
+              <button 
+                onClick={() => setShowSettings(true)}
+                title={t.settingsTooltip}
+                className="w-9 h-9 rounded-lg bg-slate-800/50 hover:bg-slate-700 border border-slate-700/70 flex items-center justify-center transition-all duration-200 relative group"
+              >
+                <i className="fa-solid fa-sliders text-sm text-slate-300 group-hover:text-white"></i>
+              </button>
+            </div>
+          </header>
+
+
+          {/* Main Area */}
+          <main className="flex-1 overflow-hidden flex flex-col relative bg-darkBg">
+            
+            {/* Background glowing gradients for sleek visuals */}
+            <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-emerald-950/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
+            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-teal-950/10 rounded-full blur-[120px] pointer-events-none z-0"></div>
+
+            {/* Scroll Buttons */}
+            {messages.length > 0 && (
+              <div className="absolute right-4 bottom-24 z-20 flex flex-col gap-2">
+                {showScrollUp && (
+                  <button
+                    onClick={scrollToTop}
+                    className="w-9 h-9 rounded-xl glass-card border border-darkBorder flex items-center justify-center text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all duration-200 shadow-lg"
+                    title="Scroll to top"
+                  >
+                    <i className="fa-solid fa-chevron-up text-xs"></i>
+                  </button>
+                )}
+                {showScrollDown && (
+                  <button
+                    onClick={scrollToBottom}
+                    className="w-9 h-9 rounded-xl glass-card border border-darkBorder flex items-center justify-center text-slate-400 hover:text-emerald-400 hover:border-emerald-500/40 transition-all duration-200 shadow-lg"
+                    title="Scroll to bottom"
+                  >
+                    <i className="fa-solid fa-chevron-down text-xs"></i>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Message Area */}
+            <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-4 py-6 md:px-8 space-y-6 relative z-10">
+              
+              {messages.length === 0 ? (
+                // Suggestions Panel (Zero State)
+                <div className="max-w-2xl mx-auto mt-8 md:mt-20 flex flex-col items-center justify-center text-center animate-fade-in">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-400/20 border border-emerald-500/30 flex items-center justify-center mb-6 shadow-xl shadow-emerald-950/20 animate-float">
+                    <i className="fa-solid fa-robot text-2xl text-emerald-400"></i>
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white mb-2">
+                    {lang === 'ar' ? 'أهلاً، أنا بَدِي' : lang === 'fr' ? "Salut, je suis buddy" : "Hello, I'm buddy"}
+                  </h2>
+                  <p className="text-slate-400 max-w-md text-sm md:text-base mb-8">
+                    {lang === 'ar' 
+                      ? 'مساعدك الذكي، الودود والمباشر. اسألني عن أي شيء أو ابحث في الويب للحصول على معلومات حية!' 
+                      : lang === 'fr' 
+                        ? 'Votre compagnon intelligent et direct. Posez-moi des questions ou cherchez en temps réel sur le web !'
+                        : 'Your smart, friendly, direct AI sidekick. Ask me anything, or run a real-time web search for fresh facts!'}
+                  </p>
+
+                  <div className="w-full">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 text-center mb-4">
+                      {t.suggestedTitle}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl mx-auto">
+                      {t.suggestions.map((sug, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleSendMessage(sug.text)}
+                          className="glass-card hover:bg-slate-800/80 hover:border-emerald-500/40 p-4 rounded-xl text-left transition-all duration-200 group flex items-start space-x-3 space-x-reverse"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-all duration-200 mt-0.5 shrink-0">
+                            <i className="fa-solid fa-magnifying-glass text-xs"></i>
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-300 group-hover:text-emerald-400 transition-all duration-150">
+                              {sug.label}
+                            </div>
+                            <div className="text-xs text-slate-400 group-hover:text-slate-300 transition-all duration-150 mt-1 line-clamp-1">
+                              {sug.text}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Message List
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {messages.map((msg) => (
+                    <div 
+                      key={msg.id} 
+                      className={`flex w-full items-start gap-3 md:gap-4 ${
+                        msg.sender === 'user' ? 'justify-end' : 'justify-start'
+                      } animate-slide-up`}
+                    >
+                      {/* Avatar for Assistant */}
+                      {msg.sender !== 'user' && (
+                        <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-md shrink-0">
+                          <i className="fa-solid fa-robot text-white text-xs"></i>
+                        </div>
+                      )}
+
+                      {/* Chat Bubbles */}
+                      <div className="flex flex-col max-w-[85%] md:max-w-[75%] space-y-1.5">
+                        
+                        {/* Error Message Card */}
+                        {msg.sender === 'system-error' ? (
+                          <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-4 rounded-xl text-sm flex items-start gap-3">
+                            <i className="fa-solid fa-circle-exclamation text-red-500 text-lg mt-0.5"></i>
+                            <div>{msg.text}</div>
+                          </div>
+                        ) : (
+                          // Standard Bubble
+                          <div 
+                            className={`px-4 py-3 rounded-2xl ${
+                              msg.sender === 'user' 
+                                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-950/20 rounded-br-none' 
+                                : 'glass-card text-slate-200 rounded-bl-none'
+                            }`}
+                          >
+                            {/* Rendering Body Content */}
+                            {renderMessageContent(msg.text)}
+
+                            {/* Citations block */}
+                            {msg.sources && msg.sources.length > 0 && (
+                              <div className="mt-4 pt-3 border-t border-darkBorder">
+                                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                  <i className="fa-solid fa-circle-nodes text-emerald-400"></i>
+                                  {t.sourcesLabel}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {msg.sources.map((src, sIdx) => (
+                                    <a
+                                      key={sIdx}
+                                      href={src.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-all duration-150"
+                                    >
+                                      <i className="fa-solid fa-link text-[10px]"></i>
+                                      <span>{src.title}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Searching Indicator Card */}
+                  {searchingQuery && (
+                    <div className="flex w-full items-start gap-4 justify-start animate-slide-up">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-md shrink-0">
+                        <i className="fa-solid fa-robot text-white text-xs"></i>
+                      </div>
+                      <div className="glass-card max-w-[85%] md:max-w-[75%] p-4 rounded-2xl rounded-bl-none border-emerald-500/25 flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin shrink-0"></div>
+                        <div className="text-xs md:text-sm text-slate-300">
+                          <span className="font-semibold text-emerald-400">{t.searchingWeb}</span>
+                          <span className="text-slate-400 text-[11px] block md:inline md:ml-1 md:rtl:mr-1">
+                            ({t.searchQueryPre} <span className="italic text-slate-200 font-mono">"{searchingQuery}"</span>)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Typing Indicator */}
+                  {isTyping && !searchingQuery && (
+                    <div className="flex w-full items-start gap-4 justify-start animate-slide-up">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-md shrink-0">
+                        <i className="fa-solid fa-robot text-white text-xs"></i>
+                      </div>
+                      <div className="glass-card max-w-[80px] px-4 py-3.5 rounded-2xl rounded-bl-none flex items-center justify-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-slate-400 typing-dot"></span>
+                        <span className="w-2 h-2 rounded-full bg-slate-400 typing-dot"></span>
+                        <span className="w-2 h-2 rounded-full bg-slate-400 typing-dot"></span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            {/* Input Form Bar */}
+            <div className="border-t border-darkBorder glass-panel px-4 py-4 md:px-8 relative z-10">
+              <div class="max-w-3xl mx-auto">
+                <form 
+                  onSubmit={(e) => { e.preventDefault(); handleSendMessage(inputText); }}
+                  className="relative flex items-center w-full bg-slate-900/90 rounded-2xl border border-slate-700/80 focus-within:border-emerald-500/60 shadow-xl pr-3 pl-3 py-1 transition-all duration-200"
+                >
+                  <textarea
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(inputText);
+                      }
+                    }}
+                    placeholder={t.inputPlaceholder}
+                    rows="1"
+                    className="w-full py-3 bg-transparent border-0 outline-none focus:ring-0 resize-none text-sm text-slate-100 max-h-32 placeholder-slate-500 pl-2 pr-12 overflow-y-auto"
+                  />
+
+                  {/* Action Controls */}
+                  <div className="flex items-center space-x-1 space-x-reverse ml-2 shrink-0">
+                    <button
+                      type="submit"
+                      disabled={!inputText.trim() || isTyping || !!searchingQuery}
+                      title={t.sendTooltip}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                        inputText.trim() && !isTyping && !searchingQuery
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:scale-105 shadow-md shadow-emerald-950/20'
+                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <i className={`fa-solid ${isRtl ? 'fa-arrow-left' : 'fa-arrow-right'} text-sm`}></i>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </main>
+
+          {/* Settings Modal Dialog */}
+          {showSettings && (
+            <div className="fixed inset-0 bg-darkBg/80 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-fade-in">
+              <div 
+                className="glass-panel w-full max-w-lg rounded-2xl border border-darkBorder shadow-2xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="border-b border-darkBorder px-6 py-4 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <i className="fa-solid fa-sliders text-emerald-400"></i>
+                    {t.settingsTitle}
+                  </h3>
+                  <button 
+                    onClick={() => setShowSettings(false)}
+                    className="text-slate-400 hover:text-white transition-colors duration-150"
+                  >
+                    <i className="fa-solid fa-xmark text-lg"></i>
+                  </button>
+                </div>
+                
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const fd = new FormData(e.target);
+                    handleSaveSettings(fd.get('model'));
+                  }}
+                  className="p-6 space-y-5"
+                >
+
+                  {/* Gemini Model */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                      {t.modelLabel}
+                    </label>
+                    <select 
+                      name="model"
+                      defaultValue={model}
+                      className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl focus:border-emerald-500 focus:outline-none text-sm text-slate-100"
+                    >
+                      <option value="gemini-2.0-flash">gemini-2.0-flash (Default · Fast)</option>
+                      <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Lightest)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (Latest · Smarter)</option>
+                    </select>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings(false)}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 rounded-xl transition-colors duration-150"
+                    >
+                      {t.closeBtn}
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-xl hover:scale-105 shadow-md shadow-emerald-950/20 transition-all duration-150"
+                    >
+                      {t.saveBtn}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    // Render the App
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+  </script>
+</body>
+</html>
+
