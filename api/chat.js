@@ -1,5 +1,5 @@
 // api/chat.js — Vercel Serverless Function
-// Powered by Groq (free, 14,400 req/day, no credit card)
+// Groq (Llama 3.3 70B) + Tavily web search for real-time info
 
 const rateLimitMap = new Map();
 const RATE_LIMIT = 10;
@@ -17,6 +17,39 @@ function isRateLimited(ip) {
   return false;
 }
 
+// Detect if the question needs real-time web search
+function needsSearch(text) {
+  const triggers = [
+    // English
+    'weather', 'price', 'stock', 'news', 'latest', 'current', 'today', 'now',
+    'score', 'match', 'game', 'result', 'standing', 'live', 'transfer',
+    'who is', 'what is the', 'when is', 'where is',
+    // French
+    'météo', 'actualité', 'maintenant', 'aujourd', 'résultat', 'match', 'prix',
+    // Arabic
+    'طقس', 'سعر', 'أخبار', 'الآن', 'اليوم', 'نتيجة', 'مباراة', 'منتخب'
+  ];
+  const lower = text.toLowerCase();
+  return triggers.some(t => lower.includes(t));
+}
+
+// Search the web using Tavily
+async function searchWeb(query) {
+  const res = await fetch('https://api.tavily.com/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: process.env.TAVILY_API_KEY,
+      query,
+      search_depth: 'basic',
+      max_results: 5,
+      include_answer: true
+    })
+  });
+  const data = await res.json();
+  return data;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -31,32 +64,48 @@ export default async function handler(req, res) {
   }
 
   const { messages, lang } = req.body;
-
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid request body.' });
   }
 
-  const systemPrompt = lang === 'ar'
-    ? "أنت بَدِي (buddy)، روبوت دردشة ذكي، ودود ومباشر. يجب أن تشعر المستخدم وكأنه يتحدث مع إنسان ذكي ومرح وصريح جداً في إجاباته."
-    : lang === 'fr'
-      ? "Tu es buddy, un assistant IA intelligent, amical et direct. Le ton doit être direct, chaleureux, perspicace et naturel."
-      : "You are buddy, a friendly, smart, and direct AI chatbot. Your tone is conversational, helpful, direct, and witty, feeling like talking to a human.";
+  const lastUserMessage = messages.filter(m => m.sender === 'user').pop()?.text || '';
 
-  // Format messages for Groq (OpenAI-compatible format)
+  const systemPrompt = lang === 'ar'
+    ? "أنت بَدِي (buddy)، روبوت دردشة ذكي، ودود ومباشر. يجب أن تشعر المستخدم وكأنه يتحدث مع إنسان ذكي ومرح وصريح جداً في إجاباته. إذا أُعطيت نتائج بحث، استخدمها للإجابة بدقة."
+    : lang === 'fr'
+      ? "Tu es buddy, un assistant IA intelligent, amical et direct. Si des résultats de recherche sont fournis, utilise-les pour répondre avec précision."
+      : "You are buddy, a friendly, smart, and direct AI chatbot. If search results are provided, use them to answer accurately with up-to-date information. Never say you don't have access to real-time info — you do via search results.";
+
+  // Run web search if needed
+  let searchContext = '';
+  let sources = [];
+
+  if (needsSearch(lastUserMessage)) {
+    try {
+      const searchData = await searchWeb(lastUserMessage);
+      if (searchData.results?.length > 0) {
+        searchContext = '\n\n[WEB SEARCH RESULTS]\n' +
+          searchData.results.map((r, i) =>
+            `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`
+          ).join('\n\n');
+
+        sources = searchData.results.map(r => ({
+          title: r.title,
+          url: r.url
+        }));
+      }
+    } catch (e) {
+      console.error('Tavily search error:', e);
+    }
+  }
+
   const groqMessages = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: systemPrompt + searchContext },
     ...messages.map(msg => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
       content: msg.text
     }))
   ];
-
-  const payload = {
-    model: 'llama-3.3-70b-versatile', // best free model on Groq
-    messages: groqMessages,
-    max_tokens: 1024,
-    temperature: 0.7
-  };
 
   try {
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -65,7 +114,12 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: groqMessages,
+        max_tokens: 1024,
+        temperature: 0.7
+      })
     });
 
     const data = await groqRes.json();
@@ -74,9 +128,8 @@ export default async function handler(req, res) {
       return res.status(groqRes.status).json({ error: data.error?.message || 'Groq API error' });
     }
 
-    // Return in a format the frontend can use
     const text = data.choices?.[0]?.message?.content || '';
-    return res.status(200).json({ text });
+    return res.status(200).json({ text, sources });
 
   } catch (err) {
     console.error('Groq fetch error:', err);
