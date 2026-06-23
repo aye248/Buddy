@@ -1,5 +1,5 @@
 // api/chat.js — Vercel Serverless Function
-// Groq (Llama 3.3 70B) + Tavily web search for real-time info
+// Groq + Tavily (always search, full history, smart system prompt)
 
 const rateLimitMap = new Map();
 const RATE_LIMIT = 10;
@@ -17,23 +17,6 @@ function isRateLimited(ip) {
   return false;
 }
 
-// Detect if the question needs real-time web search
-function needsSearch(text) {
-  const triggers = [
-    // English
-    'weather', 'price', 'stock', 'news', 'latest', 'current', 'today', 'now',
-    'score', 'match', 'game', 'result', 'standing', 'live', 'transfer',
-    'who is', 'what is the', 'when is', 'where is',
-    // French
-    'météo', 'actualité', 'maintenant', 'aujourd', 'résultat', 'match', 'prix',
-    // Arabic
-    'طقس', 'سعر', 'أخبار', 'الآن', 'اليوم', 'نتيجة', 'مباراة', 'منتخب'
-  ];
-  const lower = text.toLowerCase();
-  return triggers.some(t => lower.includes(t));
-}
-
-// Search the web using Tavily
 async function searchWeb(query) {
   const res = await fetch('https://api.tavily.com/search', {
     method: 'POST',
@@ -41,13 +24,12 @@ async function searchWeb(query) {
     body: JSON.stringify({
       api_key: process.env.TAVILY_API_KEY,
       query,
-      search_depth: 'basic',
+      search_depth: 'advanced',  // richer results
       max_results: 5,
       include_answer: true
     })
   });
-  const data = await res.json();
-  return data;
+  return await res.json();
 }
 
 export default async function handler(req, res) {
@@ -70,38 +52,67 @@ export default async function handler(req, res) {
 
   const lastUserMessage = messages.filter(m => m.sender === 'user').pop()?.text || '';
 
-  const systemPrompt = lang === 'ar'
-    ? "أنت بَدِي (buddy)، روبوت دردشة ذكي، ودود ومباشر. يجب أن تشعر المستخدم وكأنه يتحدث مع إنسان ذكي ومرح وصريح جداً في إجاباته. إذا أُعطيت نتائج بحث، استخدمها للإجابة بدقة."
-    : lang === 'fr'
-      ? "Tu es buddy, un assistant IA intelligent, amical et direct. Si des résultats de recherche sont fournis, utilise-les pour répondre avec précision."
-      : "You are buddy, a friendly, smart, and direct AI chatbot. If search results are provided, use them to answer accurately with up-to-date information. Never say you don't have access to real-time info — you do via search results.";
+  // Smart system prompt per language
+  const systemPrompts = {
+    en: `You are buddy, a smart, direct, and friendly AI assistant.
+Rules you must always follow:
+- Always give a concrete, direct answer. Never dodge or say "I'm not sure".
+- Never say you lack real-time info — you have web search results below, use them.
+- Be concise. No unnecessary filler like "Great question!" or "Certainly!".
+- Use markdown formatting when it helps clarity (bold, lists, code blocks).
+- If web search results are provided, base your answer on them and cite them naturally.
+- Remember the full conversation history and refer back to it when relevant.
+- If the user writes in a language, respond in that same language.`,
 
-  // Run web search if needed
+    fr: `Tu es buddy, un assistant IA intelligent, direct et amical.
+Règles à toujours respecter:
+- Donne toujours une réponse concrète et directe. Ne botte jamais en touche.
+- Ne dis jamais que tu manques d'infos en temps réel — tu as des résultats de recherche ci-dessous.
+- Sois concis. Pas de remplissage inutile comme "Bonne question!".
+- Utilise le markdown quand ça aide (gras, listes, blocs de code).
+- Si des résultats de recherche sont fournis, base ta réponse dessus.
+- Mémorise l'historique complet de la conversation et réfère-toi y si pertinent.`,
+
+    ar: `أنت بَدِي، مساعد ذكاء اصطناعي ذكي ومباشر وودود.
+قواعد يجب اتباعها دائماً:
+- أعطِ دائماً إجابة مباشرة وملموسة. لا تتهرب أبداً.
+- لا تقل أبداً أنك تفتقر إلى معلومات حية — لديك نتائج بحث أدناه، استخدمها.
+- كن موجزاً. لا حشو غير ضروري.
+- استخدم تنسيق markdown عند الحاجة.
+- إذا تم تزويدك بنتائج بحث، استند إليها في إجابتك.
+- تذكر كامل تاريخ المحادثة وأشر إليه عند الحاجة.`
+  };
+
+  const systemPrompt = systemPrompts[lang] || systemPrompts.en;
+
+  // Always search web for every message
   let searchContext = '';
   let sources = [];
 
-  if (needsSearch(lastUserMessage)) {
-    try {
-      const searchData = await searchWeb(lastUserMessage);
-      if (searchData.results?.length > 0) {
-        searchContext = '\n\n[WEB SEARCH RESULTS]\n' +
-          searchData.results.map((r, i) =>
-            `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`
-          ).join('\n\n');
+  try {
+    const searchData = await searchWeb(lastUserMessage);
+    if (searchData.results?.length > 0) {
+      searchContext = '\n\n[REAL-TIME WEB SEARCH RESULTS - use these to answer]\n' +
+        searchData.results.map((r, i) =>
+          `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`
+        ).join('\n\n');
 
-        sources = searchData.results.map(r => ({
-          title: r.title,
-          url: r.url
-        }));
-      }
-    } catch (e) {
-      console.error('Tavily search error:', e);
+      sources = searchData.results.map(r => ({
+        title: r.title,
+        url: r.url
+      }));
     }
+  } catch (e) {
+    console.error('Tavily error:', e);
+    // continue without search if Tavily fails
   }
+
+  // Send last 10 messages for context memory
+  const recentMessages = messages.slice(-10);
 
   const groqMessages = [
     { role: 'system', content: systemPrompt + searchContext },
-    ...messages.map(msg => ({
+    ...recentMessages.map(msg => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
       content: msg.text
     }))
@@ -115,10 +126,10 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'deepseek-r1-distill-llama-70b', // thinks before answering
         messages: groqMessages,
         max_tokens: 1024,
-        temperature: 0.7
+        temperature: 0.6
       })
     });
 
@@ -128,11 +139,15 @@ export default async function handler(req, res) {
       return res.status(groqRes.status).json({ error: data.error?.message || 'Groq API error' });
     }
 
-    const text = data.choices?.[0]?.message?.content || '';
+    let text = data.choices?.[0]?.message?.content || '';
+
+    // Remove deepseek's <think>...</think> block from response
+    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
     return res.status(200).json({ text, sources });
 
   } catch (err) {
-    console.error('Groq fetch error:', err);
+    console.error('Groq error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
