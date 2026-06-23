@@ -126,7 +126,7 @@ Règles à toujours respecter:
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'deepseek-r1-distill-llama-70b', // thinks before answering
+        model: 'openai/gpt-oss-120b',
         messages: groqMessages,
         max_tokens: 1024,
         temperature: 0.6
@@ -142,7 +142,7 @@ Règles à toujours respecter:
     let text = data.choices?.[0]?.message?.content || '';
 
     // Remove deepseek's <think>...</think> block from response
-    text = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    
 
     return res.status(200).json({ text, sources });
 
